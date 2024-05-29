@@ -8,6 +8,7 @@
  */
 
 import type { Encoding } from '@47ng/codec'
+import type { KeysConfiguration } from './encryption'
 import { z } from 'zod'
 
 /**
@@ -69,6 +70,8 @@ export type DMMFDocument = z.TypeOf<typeof dmmfDocumentParser>
 export interface Configuration {
   encryptionKey?: string
   decryptionKeys?: string[]
+  decryptor?: (cipherText: string, model: string, field: string, keys: KeysConfiguration) => string | undefined
+  encryptor?: (cipherText: string, model: string, field: string, keys: KeysConfiguration) => string | undefined
   dmmf?: Readonly<DMMFDocument>
 }
 
