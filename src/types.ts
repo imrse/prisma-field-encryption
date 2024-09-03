@@ -71,7 +71,8 @@ export interface Configuration {
   encryptionKey?: string
   decryptionKeys?: string[]
   decryptor?: (cipherText: string, model: string, field: string, keys: KeysConfiguration) => string | undefined
-  encryptor?: (cipherText: string, model: string, field: string, keys: KeysConfiguration) => string | undefined
+  encryptor?: (clearText: string, model: string, field: string, keys: KeysConfiguration) => string | undefined
+  hasher?: (clearText: string, hashConfig: Omit<HashFieldConfiguration, 'sourceField'>, model: string, field: string, keys: KeysConfiguration) => string | undefined
   dmmf?: Readonly<DMMFDocument>
 }
 
