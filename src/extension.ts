@@ -11,6 +11,7 @@ export function fieldEncryptionExtension<
   const keys = configureKeys(config)
   const customEncryptor = config.encryptor
   const customDecryptor = config.decryptor
+  const customHasher = config.hasher
   debug.setup('Keys: %O', keys)
   const models = analyseDMMF(
     config.dmmf ?? require('@prisma/client').Prisma.dmmf
@@ -43,7 +44,8 @@ export function fieldEncryptionExtension<
             keys,
             models,
             operation,
-            customEncryptor
+            customEncryptor,
+            customHasher
           )
           let result = await query(encryptedParams.args)
           decryptOnRead(encryptedParams, result, keys, models, operation, customDecryptor)

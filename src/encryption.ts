@@ -13,9 +13,10 @@ import objectPath from 'object-path'
 import { debug } from './debugger'
 import type { DMMFModels } from './dmmf'
 import { errors, warnings } from './errors'
-import { hashString } from './hash'
+import { hashString, normalizeHashString } from './hash'
 import type { Configuration, MiddlewareParams } from './types'
 import { visitInputTargetFields, visitOutputTargetFields } from './visitor'
+import { HashFieldConfiguration } from './types'
 
 export interface KeysConfiguration {
   encryptionKey: ParsedCloakKey
@@ -56,7 +57,8 @@ export function encryptOnWrite<Models extends string, Actions extends string>(
   keys: KeysConfiguration,
   models: DMMFModels,
   operation: string,
-  customEncryptor?: (clearText: string, model: string, field: string, keys: KeysConfiguration) => string | undefined
+  customEncryptor?: (clearText: string, model: string, field: string, keys: KeysConfiguration) => string | undefined,
+  customHasher?: (clearText: string, hashConfig: Omit<HashFieldConfiguration, 'sourceField'>, model: string, field: string, keys: KeysConfiguration) => string | undefined
 ) {
   debug.encryption('Clear-text input: %O', params)
   const encryptionErrors: string[] = []
@@ -82,7 +84,8 @@ export function encryptOnWrite<Models extends string, Actions extends string>(
             if (!fieldConfig.hash) {
               console.warn(warnings.whereConnectClauseNoHash(operation, path))
             } else {
-              const hash = hashString(clearText, fieldConfig.hash)
+              const normalized = normalizeHashString(clearText, fieldConfig.hash.normalize)
+              const hash = customHasher ? customHasher(normalized, fieldConfig.hash, model, field, keys) : hashString(normalized, fieldConfig.hash)
               debug.encryption(
                 `Swapping encrypted search of ${model}.${field} with hash search under ${fieldConfig.hash.targetField} (hash: ${hash})`
               )
@@ -110,7 +113,8 @@ export function encryptOnWrite<Models extends string, Actions extends string>(
             objectPath.set(draft.args, path, cipherText)
             debug.encryption(`Encrypted ${model}.${field} at path \`${path}\``)
             if (fieldConfig.hash) {
-              const hash = hashString(clearText, fieldConfig.hash)
+              const normalized = normalizeHashString(clearText, fieldConfig.hash.normalize)
+              const hash = customHasher ? customHasher(normalized, fieldConfig.hash, model, field, keys) : hashString(normalized, fieldConfig.hash)
               const hashPath = rewriteWritePath(
                 path,
                 field,
