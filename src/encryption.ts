@@ -13,9 +13,10 @@ import objectPath from 'object-path'
 import { debug } from './debugger'
 import type { DMMFModels } from './dmmf'
 import { errors, warnings } from './errors'
-import { hashString } from './hash'
+import { hashString, normalizeHashString } from './hash'
 import type { Configuration, MiddlewareParams } from './types'
 import { visitInputTargetFields, visitOutputTargetFields } from './visitor'
+import { HashFieldConfiguration } from './types'
 
 export interface KeysConfiguration {
   encryptionKey: ParsedCloakKey
@@ -55,7 +56,9 @@ export function encryptOnWrite<Models extends string, Actions extends string>(
   params: MiddlewareParams<Models, Actions>,
   keys: KeysConfiguration,
   models: DMMFModels,
-  operation: string
+  operation: string,
+  customEncryptor?: (clearText: string, model: string, field: string, keys: KeysConfiguration) => string | undefined,
+  customHasher?: (clearText: string, hashConfig: Omit<HashFieldConfiguration, 'sourceField'>, model: string, field: string, keys: KeysConfiguration) => string | undefined
 ) {
   debug.encryption('Clear-text input: %O', params)
   const encryptionErrors: string[] = []
@@ -81,7 +84,8 @@ export function encryptOnWrite<Models extends string, Actions extends string>(
             if (!fieldConfig.hash) {
               console.warn(warnings.whereConnectClauseNoHash(operation, path))
             } else {
-              const hash = hashString(clearText, fieldConfig.hash)
+              const normalized = normalizeHashString(clearText, fieldConfig.hash.normalize)
+              const hash = customHasher ? customHasher(normalized, fieldConfig.hash, model, field, keys) : hashString(normalized, fieldConfig.hash)
               debug.encryption(
                 `Swapping encrypted search of ${model}.${field} with hash search under ${fieldConfig.hash.targetField} (hash: ${hash})`
               )
@@ -104,11 +108,13 @@ export function encryptOnWrite<Models extends string, Actions extends string>(
             return
           }
           try {
-            const cipherText = encryptStringSync(clearText, keys.encryptionKey)
+            const encryptor = customEncryptor || defaultEncryptor
+            const cipherText = encryptor(clearText, model, field, keys)
             objectPath.set(draft.args, path, cipherText)
             debug.encryption(`Encrypted ${model}.${field} at path \`${path}\``)
             if (fieldConfig.hash) {
-              const hash = hashString(clearText, fieldConfig.hash)
+              const normalized = normalizeHashString(clearText, fieldConfig.hash.normalize)
+              const hash = customHasher ? customHasher(normalized, fieldConfig.hash, model, field, keys) : hashString(normalized, fieldConfig.hash)
               const hashPath = rewriteWritePath(
                 path,
                 field,
@@ -140,7 +146,8 @@ export function decryptOnRead<Models extends string, Actions extends string>(
   result: any,
   keys: KeysConfiguration,
   models: DMMFModels,
-  operation: string
+  operation: string,
+  customDecryptor?: (cipherText: string, model: string, field: string, keys: KeysConfiguration) => string | undefined
 ) {
   // Analyse the query to see if there's anything to decrypt.
   const model = models[params.model!]
@@ -179,12 +186,13 @@ export function decryptOnRead<Models extends string, Actions extends string>(
         if (!parseCloakedString(cipherText)) {
           return
         }
-        const decryptionKey = findKeyForMessage(cipherText, keys.keychain)
-        const clearText = decryptStringSync(cipherText, decryptionKey)
+        const decryptor = customDecryptor || defaultDecryptor
+        const clearText = decryptor(cipherText, model, field, keys)
+        if (clearText === undefined) {
+          return
+        }
         objectPath.set(result, path, clearText)
-        debug.decryption(
-          `Decrypted ${model}.${field} at path \`${path}\` using key fingerprint ${decryptionKey.fingerprint}`
-        )
+        debug.decryption(`Decrypted ${model}.${field} at path \`${path}\``)
       } catch (error) {
         const message = errors.fieldDecryptionError(model, field, path, error)
         if (fieldConfig.strictDecryption) {
@@ -225,6 +233,15 @@ function rewriteHashedFieldPath(
     }
   }
   return null
+}
+
+function defaultEncryptor(clearText: string, model?: string, field?: string, keys?: any) :string | undefined {
+  return encryptStringSync(clearText, keys.encryptionKey)
+}
+
+function defaultDecryptor(cipherText: string, model?: string, field?: string, keys?: any) :string | undefined {
+  const decryptionKey = findKeyForMessage(cipherText, keys.keychain)
+  return decryptStringSync(cipherText, decryptionKey)
 }
 
 function rewriteWritePath(path: string, field: string, hashField: string) {
