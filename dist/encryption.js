@@ -45,7 +45,9 @@ function encryptOnWrite(params, keys, models, operation, customEncryptor, custom
                 }
                 else {
                     const normalized = (0, hash_1.normalizeHashString)(clearText, fieldConfig.hash.normalize);
-                    const hash = customHasher ? customHasher(normalized, fieldConfig.hash, model, field, keys) : (0, hash_1.hashString)(normalized, fieldConfig.hash);
+                    const hash = customHasher
+                        ? customHasher(normalized, fieldConfig.hash, model, field, keys)
+                        : (0, hash_1.hashString)(normalized, fieldConfig.hash);
                     debugger_1.debug.encryption(`Swapping encrypted search of ${model}.${field} with hash search under ${fieldConfig.hash.targetField} (hash: ${hash})`);
                     object_path_1.default.del(draft.args, path);
                     object_path_1.default.set(draft.args, hashedPath, hash);
@@ -70,7 +72,9 @@ function encryptOnWrite(params, keys, models, operation, customEncryptor, custom
                 debugger_1.debug.encryption(`Encrypted ${model}.${field} at path \`${path}\``);
                 if (fieldConfig.hash) {
                     const normalized = (0, hash_1.normalizeHashString)(clearText, fieldConfig.hash.normalize);
-                    const hash = customHasher ? customHasher(normalized, fieldConfig.hash, model, field, keys) : (0, hash_1.hashString)(normalized, fieldConfig.hash);
+                    const hash = customHasher
+                        ? customHasher(normalized, fieldConfig.hash, model, field, keys)
+                        : (0, hash_1.hashString)(normalized, fieldConfig.hash);
                     const hashPath = rewriteWritePath(path, field, fieldConfig.hash.targetField);
                     object_path_1.default.set(draft.args, hashPath, hash);
                     debugger_1.debug.encryption(`Added hash ${hash} of ${model}.${field} under ${fieldConfig.hash.targetField}`);
@@ -107,6 +111,10 @@ function decryptOnRead(params, result, keys, models, operation, customDecryptor)
     const fatalDecryptionErrors = [];
     (0, visitor_1.visitOutputTargetFields)(params, result, models, function decryptFieldValue({ fieldConfig, value: cipherText, path, model, field }) {
         try {
+            if (cipherText == '') {
+                object_path_1.default.set(result, path, null);
+                return;
+            }
             const decryptor = customDecryptor || defaultDecryptor;
             const clearText = decryptor(cipherText, model, field, keys);
             if (clearText === undefined) {
@@ -137,7 +145,9 @@ exports.decryptOnRead = decryptOnRead;
 function rewriteHashedFieldPath(path, field, hashField) {
     const items = path.split('.').reverse();
     // Special case for `where field equals or not` clause
-    if (items.includes('where') && items[1] === field && ['equals', 'not'].includes(items[0])) {
+    if (items.includes('where') &&
+        items[1] === field &&
+        ['equals', 'not'].includes(items[0])) {
         items[1] = hashField;
         return items.reverse().join('.');
     }
