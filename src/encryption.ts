@@ -57,8 +57,19 @@ export function encryptOnWrite<Models extends string, Actions extends string>(
   keys: KeysConfiguration,
   models: DMMFModels,
   operation: string,
-  customEncryptor?: (clearText: string, model: string, field: string, keys: KeysConfiguration) => string | undefined,
-  customHasher?: (clearText: string, hashConfig: Omit<HashFieldConfiguration, 'sourceField'>, model: string, field: string, keys: KeysConfiguration) => string | undefined
+  customEncryptor?: (
+    clearText: string,
+    model: string,
+    field: string,
+    keys: KeysConfiguration
+  ) => string | undefined,
+  customHasher?: (
+    clearText: string,
+    hashConfig: Omit<HashFieldConfiguration, 'sourceField'>,
+    model: string,
+    field: string,
+    keys: KeysConfiguration
+  ) => string | undefined
 ) {
   debug.encryption('Clear-text input: %O', params)
   const encryptionErrors: string[] = []
@@ -84,8 +95,13 @@ export function encryptOnWrite<Models extends string, Actions extends string>(
             if (!fieldConfig.hash) {
               console.warn(warnings.whereConnectClauseNoHash(operation, path))
             } else {
-              const normalized = normalizeHashString(clearText, fieldConfig.hash.normalize)
-              const hash = customHasher ? customHasher(normalized, fieldConfig.hash, model, field, keys) : hashString(normalized, fieldConfig.hash)
+              const normalized = normalizeHashString(
+                clearText,
+                fieldConfig.hash.normalize
+              )
+              const hash = customHasher
+                ? customHasher(normalized, fieldConfig.hash, model, field, keys)
+                : hashString(normalized, fieldConfig.hash)
               debug.encryption(
                 `Swapping encrypted search of ${model}.${field} with hash search under ${fieldConfig.hash.targetField} (hash: ${hash})`
               )
@@ -113,8 +129,13 @@ export function encryptOnWrite<Models extends string, Actions extends string>(
             objectPath.set(draft.args, path, cipherText)
             debug.encryption(`Encrypted ${model}.${field} at path \`${path}\``)
             if (fieldConfig.hash) {
-              const normalized = normalizeHashString(clearText, fieldConfig.hash.normalize)
-              const hash = customHasher ? customHasher(normalized, fieldConfig.hash, model, field, keys) : hashString(normalized, fieldConfig.hash)
+              const normalized = normalizeHashString(
+                clearText,
+                fieldConfig.hash.normalize
+              )
+              const hash = customHasher
+                ? customHasher(normalized, fieldConfig.hash, model, field, keys)
+                : hashString(normalized, fieldConfig.hash)
               const hashPath = rewriteWritePath(
                 path,
                 field,
@@ -147,7 +168,12 @@ export function decryptOnRead<Models extends string, Actions extends string>(
   keys: KeysConfiguration,
   models: DMMFModels,
   operation: string,
-  customDecryptor?: (cipherText: string, model: string, field: string, keys: KeysConfiguration) => string | undefined
+  customDecryptor?: (
+    cipherText: string,
+    model: string,
+    field: string,
+    keys: KeysConfiguration
+  ) => string | undefined
 ) {
   // Analyse the query to see if there's anything to decrypt.
   const model = models[params.model!]
@@ -183,6 +209,11 @@ export function decryptOnRead<Models extends string, Actions extends string>(
       field
     }) {
       try {
+        if (cipherText == '') {
+          objectPath.set(result, path, null)
+          return
+        }
+
         const decryptor = customDecryptor || defaultDecryptor
         const clearText = decryptor(cipherText, model, field, keys)
         if (clearText === undefined) {
@@ -218,7 +249,11 @@ function rewriteHashedFieldPath(
 ) {
   const items = path.split('.').reverse()
   // Special case for `where field equals or not` clause
-  if (items.includes('where') && items[1] === field && ['equals', 'not'].includes(items[0])) {
+  if (
+    items.includes('where') &&
+    items[1] === field &&
+    ['equals', 'not'].includes(items[0])
+  ) {
     items[1] = hashField
     return items.reverse().join('.')
   }
@@ -232,11 +267,21 @@ function rewriteHashedFieldPath(
   return null
 }
 
-function defaultEncryptor(clearText: string, model?: string, field?: string, keys?: any) :string | undefined {
+function defaultEncryptor(
+  clearText: string,
+  model?: string,
+  field?: string,
+  keys?: any
+): string | undefined {
   return encryptStringSync(clearText, keys.encryptionKey)
 }
 
-function defaultDecryptor(cipherText: string, model?: string, field?: string, keys?: any) :string | undefined {
+function defaultDecryptor(
+  cipherText: string,
+  model?: string,
+  field?: string,
+  keys?: any
+): string | undefined {
   if (!parseCloakedString(cipherText)) {
     return
   }
